@@ -131,10 +131,14 @@ def fmt_time_hhmm(acq_time) -> str:
 def build_point_columns(df: pd.DataFrame) -> list[str]:
     """
     Selecciona columnas útiles sin romper si no existen.
+
+    ✅ Cambiado: latitude + longitude se reemplazan por columna virtual 'coords'
+       que renderiza "Lat,Lon" y link a Google Maps.
     """
     preferred_cols = [
-        "latitude",
-        "longitude",
+        # "latitude",   Ya no se utiliza
+        # "longitude",  Ya no se utiliza
+        "coords",       # <-- virtual
         "acq_date",
         "acq_time",
         # "confidence",
@@ -148,11 +152,22 @@ def build_point_columns(df: pd.DataFrame) -> list[str]:
         "distance_km",
         # "_source",
     ]
-    return [c for c in preferred_cols if c in df.columns]
+
+    cols = []
+    for c in preferred_cols:
+        if c == "coords":
+            # Solo mostrar si existen lat/lon en el CSV
+            if "latitude" in df.columns and "longitude" in df.columns:
+                cols.append("coords")
+        else:
+            if c in df.columns:
+                cols.append(c)
+    return cols
 
 
 def humanize_col(c: str) -> str:
     mapping = {
+        "coords": "Coordenadas",
         "latitude": "Lat",
         "longitude": "Lon",
         "acq_date": "Fecha",
@@ -171,7 +186,30 @@ def humanize_col(c: str) -> str:
     return mapping.get(c, c)
 
 
-def format_point_value(col: str, v) -> str:
+def format_point_value(col: str, v, row: dict, styles) -> object:
+    """
+    Devuelve el valor formateado. Puede retornar str o Paragraph.
+
+    ✅ coords: "Lat,Lon" clickeable a Google Maps.
+    """
+    if col == "coords":
+        lat = row.get("latitude")
+        lon = row.get("longitude")
+        if pd.isna(lat) or pd.isna(lon):
+            return ""
+        try:
+            lat_f = float(lat)
+            lon_f = float(lon)
+            text = f"{lat_f:.6f},{lon_f:.6f}"
+            url = f"https://www.google.com/maps?q={lat_f:.6f},{lon_f:.6f}"
+            # Paragraph con link clickeable (azul y subrayado)
+            return Paragraph(
+                f'<a href="{url}"><u><font color="blue">{text}</font></u></a>',
+                styles["Small"]
+            )
+        except Exception:
+            return ""
+
     if pd.isna(v):
         return ""
     try:
@@ -192,13 +230,12 @@ def compute_col_widths(header: list[str], total_width_pts: float) -> list[float]
     """
     Asigna anchos relativos por columna para que la tabla sea legible.
     """
-    # pesos heurísticos
     weights = []
     for c in header:
         if c in ("area_nombre",):
             weights.append(3.0)
-        elif c in ("latitude", "longitude"):
-            weights.append(1.6)
+        elif c in ("coords",):
+            weights.append(2.4)
         elif c in ("acq_date",):
             weights.append(1.7)
         elif c in ("acq_time", "confidence", "daynight", "relation"):
@@ -209,7 +246,7 @@ def compute_col_widths(header: list[str], total_width_pts: float) -> list[float]
             weights.append(1.3)
 
     s = sum(weights) if weights else 1.0
-    widths = [max(45.0, total_width_pts * (w / s)) for w in weights]  # mínimo 45pt
+    widths = [max(55.0, total_width_pts * (w / s)) for w in weights]  # mínimo 45pt
     # normaliza de nuevo para no pasarse del total
     factor = total_width_pts / sum(widths)
     widths = [w * factor for w in widths]
@@ -220,7 +257,7 @@ def compute_col_widths(header: list[str], total_width_pts: float) -> list[float]
 # PDF Builder
 # ----------------------------
 
-def build_pdf(csv_path: Path, maps_dir: Path, pdf_out: Path, buffer_km:float) -> Path:
+def build_pdf(csv_path: Path, maps_dir: Path, pdf_out: Path, buffer_km: float) -> Path:
     df = pd.read_csv(csv_path)
 
     required = {"latitude", "longitude", "poly_fid", "area_nombre", "relation"}
@@ -365,7 +402,13 @@ def build_pdf(csv_path: Path, maps_dir: Path, pdf_out: Path, buffer_km:float) ->
 
         table_data = [header_labels]
         for _, r in pts.iterrows():
-            row = [format_point_value(c, r.get(c, "")) for c in cols]
+            row_dict = r.to_dict()
+            row = []
+            for c in cols:
+                if c == "coords":
+                    row.append(format_point_value("coords", None, row_dict, styles))
+                else:
+                    row.append(format_point_value(c, row_dict.get(c, ""), row_dict, styles))
             table_data.append(row)
 
         total_table_width = doc.width  # puntos
