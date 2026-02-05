@@ -19,6 +19,7 @@ Incluye:
 .env esperado (mínimo):
   OUTPUT_CSV=hotspots_vs_areas.csv
   MAPS_OUT_DIR=maps_by_polygon
+  BUFFER_KM=2
 
 Opcional:
   PDF_OUT=reports/informe_hotspots_vs_areas.pdf
@@ -59,9 +60,12 @@ def load_env() -> dict:
         "csv_path": (os.getenv("OUTPUT_CSV") or "").strip(),
         "maps_out_dir": (os.getenv("MAPS_OUT_DIR") or "maps_by_polygon").strip(),
         "pdf_out": (os.getenv("PDF_OUT") or "").strip(),
+        "buffer_km": os.getenv("BUFFER_KM")
     }
     if not cfg["csv_path"]:
-        raise ValueError("Falta OUTPUT_CSV en el .env (ruta a hotspots_vs_areas.csv).")
+        raise ValueError("Falta OUTPUT_CSV en el .env")
+    if not cfg["buffer_km"]:
+        raise ValueError("Falta BUFFER_KM en el .env")
     return cfg
 
 
@@ -113,12 +117,13 @@ def find_area_image(maps_dir: Path, poly_fid: int) -> Path | None:
 # ----------------------------
 
 def fmt_time_hhmm(acq_time) -> str:
-    """FIRMS suele traer acq_time como HHMM (int)"""
+    """Convierte HHMM (707, 1545, 30, 0, 707.0) a '07:07 AM'."""
     if pd.isna(acq_time):
         return ""
     try:
-        t = int(acq_time)
-        return f"{t:04d}"
+        t = int(float(acq_time))          # soporta 707.0
+        hhmm = f"{t:04d}"                 # 707 -> "0707"
+        return datetime.strptime(hhmm, "%H%M").strftime("%I:%M %p")
     except Exception:
         return str(acq_time)
 
@@ -128,14 +133,20 @@ def build_point_columns(df: pd.DataFrame) -> list[str]:
     Selecciona columnas útiles sin romper si no existen.
     """
     preferred_cols = [
-        "latitude", "longitude",
-        "acq_date", "acq_time",
-        "confidence", "frp",
-        "bright_ti4", "bright_ti5",
-        "daynight",
-        "satellite", "instrument",
-        "relation", "distance_km",
-        "_source",
+        "latitude",
+        "longitude",
+        "acq_date",
+        "acq_time",
+        # "confidence",
+        "frp",
+        # "bright_ti4",
+        # "bright_ti5",
+        # "daynight",
+        # "satellite",
+        # "instrument",
+        # "relation",
+        "distance_km",
+        # "_source",
     ]
     return [c for c in preferred_cols if c in df.columns]
 
@@ -145,7 +156,7 @@ def humanize_col(c: str) -> str:
         "latitude": "Lat",
         "longitude": "Lon",
         "acq_date": "Fecha",
-        "acq_time": "Hora(HHMM)",
+        "acq_time": "Hora",
         "confidence": "Conf",
         "frp": "FRP",
         "bright_ti4": "T4",
@@ -209,7 +220,7 @@ def compute_col_widths(header: list[str], total_width_pts: float) -> list[float]
 # PDF Builder
 # ----------------------------
 
-def build_pdf(csv_path: Path, maps_dir: Path, pdf_out: Path) -> Path:
+def build_pdf(csv_path: Path, maps_dir: Path, pdf_out: Path, buffer_km:float) -> Path:
     df = pd.read_csv(csv_path)
 
     required = {"latitude", "longitude", "poly_fid", "area_nombre", "relation"}
@@ -258,20 +269,19 @@ def build_pdf(csv_path: Path, maps_dir: Path, pdf_out: Path) -> Path:
     story = []
 
     gen_dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    story.append(Paragraph("Informe: Hotspots vs Áreas", styles["H1x"]))
+    story.append(Paragraph("Informe Puntos de Calor en ANP", styles["H1x"]))
     story.append(Paragraph(f"<b>Fecha de generación:</b> {gen_dt}", styles["BodyText"]))
-    story.append(Paragraph(f"<b>CSV de entrada:</b> {csv_path}", styles["Small"]))
-    story.append(Paragraph(f"<b>Directorio de imágenes:</b> {maps_dir}", styles["Small"]))
+    story.append(Paragraph(f"<b>Distancia buffer:</b> {buffer_km} km", styles["Small"]))
     story.append(Spacer(1, 10))
 
     # Resumen
     story.append(Paragraph("Resumen", styles["H2x"]))
     resumen_data = [
         ["Métrica", "Valor"],
-        ["Puntos de calor (total)", f"{total_points}"],
-        ["Áreas con puntos (poly_fid únicos)", f"{total_areas}"],
-        ["Puntos dentro del área (relation=inside)", f"{inside_points}"],
-        ["Puntos cercanos / buffer (relation=buffer)", f"{buffer_points}"],
+        ["Puntos de calor", f"{total_points}"],
+        ["Áreas con puntos de calor cercanos", f"{total_areas}"],
+        ["Puntos dentro del área", f"{inside_points}"],
+        ["Puntos cercanos", f"{buffer_points}"],
     ]
     resumen_tbl = Table(resumen_data, colWidths=[7 * cm, 6 * cm])
     resumen_tbl.setStyle(TableStyle([
@@ -285,15 +295,15 @@ def build_pdf(csv_path: Path, maps_dir: Path, pdf_out: Path) -> Path:
     story.append(Spacer(1, 12))
 
     # Áreas con puntos cercanos
-    story.append(Paragraph("Áreas con puntos de calor cercano (buffer)", styles["H2x"]))
+    story.append(Paragraph("Áreas con puntos de calor cercano", styles["H2x"]))
     if areas_with_buffer.empty:
         story.append(Paragraph("No se encontraron puntos con relation=buffer.", styles["BodyText"]))
     else:
-        data = [["poly_fid", "Área", "Puntos cercanos (buffer)"]]
+        data = [["Área", "Puntos cercanos"]]
         for _, r in areas_with_buffer.iterrows():
-            data.append([str(int(r["poly_fid"])), str(r["area_nombre"]), str(int(r["size"]))])
+            data.append([str(r["area_nombre"]), str(int(r["size"]))])
 
-        tbl = Table(data, colWidths=[3 * cm, 18 * cm, 5 * cm])
+        tbl = Table(data, colWidths=[18 * cm, 5 * cm])
         tbl.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
@@ -324,7 +334,7 @@ def build_pdf(csv_path: Path, maps_dir: Path, pdf_out: Path) -> Path:
         area_name = str(a["area_nombre"])
         npts = int(a["size"])
 
-        story.append(Paragraph(f"{area_name} (FID={fid})", styles["H2x"]))
+        story.append(Paragraph(f"{area_name}", styles["H2x"]))
         story.append(Paragraph(f"<b>Cantidad de puntos:</b> {npts}", styles["BodyText"]))
         story.append(Spacer(1, 4))
 
@@ -371,7 +381,7 @@ def build_pdf(csv_path: Path, maps_dir: Path, pdf_out: Path) -> Path:
             ("PADDING", (0, 0), (-1, -1), 2),
         ]))
 
-        story.append(Paragraph(f"Puntos asociados a: {area_name} (FID={fid})", styles["H2x"]))
+        story.append(Paragraph(f"Puntos asociados a: {area_name}", styles["H2x"]))
         story.append(pts_tbl)
         story.append(PageBreak())
 
@@ -389,6 +399,7 @@ def main() -> int:
 
         csv_path = Path(cfg["csv_path"]).expanduser().resolve()
         maps_dir = Path(cfg["maps_out_dir"]).expanduser().resolve()
+        buffer_km = float(cfg["buffer_km"])
 
         if not csv_path.exists():
             raise FileNotFoundError(f"No existe el CSV: {csv_path}")
@@ -399,7 +410,7 @@ def main() -> int:
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             pdf_out = (Path("reports") / f"informe_hotspots_vs_areas_{ts}.pdf").resolve()
 
-        out = build_pdf(csv_path=csv_path, maps_dir=maps_dir, pdf_out=pdf_out)
+        out = build_pdf(csv_path=csv_path, maps_dir=maps_dir, pdf_out=pdf_out, buffer_km=buffer_km)
 
         print("✔ Informe PDF generado")
         print(f"CSV: {csv_path}")
