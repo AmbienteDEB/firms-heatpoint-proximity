@@ -296,6 +296,7 @@ def build_pdf(csv_path: Path, maps_dir: Path, pdf_out: Path, buffer_km: float) -
         bottomMargin=1.0 * cm,
         title="Informe de Hotspots vs Áreas",
         author="Script automático",
+        compression=1
     )
 
     styles = getSampleStyleSheet()
