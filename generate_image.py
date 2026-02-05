@@ -305,7 +305,7 @@ def main() -> int:
             pts = points[points["poly_fid"] == fid].copy()
 
             area_name = safe_filename(str(poly_1["area_nombre"].iloc[0]))
-            out_path = out_dir / f"{area_name}__fid_{fid}.png"
+            out_path = out_dir / f"fid_{fid}__{area_name}.png"
 
             plot_one_polygon_hybrid_png(
                 poly_gdf_1row=poly_1,
