@@ -255,7 +255,7 @@ def plot_one_polygon_hybrid_png(
     fid = int(poly_3857["poly_fid"].iloc[0])
     ax.text(
         0.5, 0.98,
-        f"{area} (FID={fid})  |  Puntos={len(pts_3857)}",
+        f"{area}  |  Puntos={len(pts_3857)}",
         transform=ax.transAxes,
         ha="center", va="top",
         fontsize=22, weight="bold", color="white",
