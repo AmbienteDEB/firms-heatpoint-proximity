@@ -1,3 +1,4 @@
 .idea
 .env
 .venv
+test.local.py
