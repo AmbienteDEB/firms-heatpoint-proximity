@@ -1,8 +1,10 @@
-from src.config import Config
-from src.utils.firms_hotspots import collect_firms_records, write_csv
 import sys
 from datetime import datetime
 from pathlib import Path
+
+from src.config import Config
+from src.utils.firms_hotspots import collect_firms_records, write_csv
+from src.utils.csv_firms_to_shapefile import convert_csv_firms_to_shapefile
 
 def main():
     cfg = Config.from_env()
@@ -30,6 +32,16 @@ def main():
         print(f"Días: {cfg.days}" + (f" | Fecha: {cfg.date}" if cfg.date else " | Fecha: (más reciente)"))
         print(f"BBOX: {cfg.bbox} (west,south,east,north)")
         print(f"Filas exportadas (dedup): {len(rows)}")
+
+        # Convertir resultados a shapefile de puntos
+        print("\n=== CONVERTIR CSV A SHAPEFILE DE PUNTOS ===")
+        shp_output_dir = output_dir / "points"
+        shp_output_dir.mkdir(parents=True, exist_ok=True)
+        shp_output_path = convert_csv_firms_to_shapefile(csv_output_path,shp_output_dir)
+
+        print("✔ Conversión completada")
+        print(f"Salida (carpeta): {shp_output_dir}")
+        print(f"Shapefile: {shp_output_path}")
 
         return 0
 
