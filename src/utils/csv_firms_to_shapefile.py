@@ -26,7 +26,7 @@ def ensure_columns(df, required: list[str]) -> None:
             "Se esperan 'latitude' y 'longitude'."
         )
 
-def convert_csv_firms_to_shapefile(csv_path:Path, shp_output_dir:Path) -> Path:
+def convert_csv_firms_to_shapefile(csv_path:Path, output_dir:Path, points_crs) -> Path:
     # Permite que FIRMS_OUT sea relativo; se resuelve respecto al cwd
     csv_path = csv_path.expanduser().resolve()
 
@@ -35,6 +35,8 @@ def convert_csv_firms_to_shapefile(csv_path:Path, shp_output_dir:Path) -> Path:
 
     df = pd.read_csv(csv_path)
     ensure_columns(df, ["latitude", "longitude"])
+
+    shp_output_dir = output_dir / "hotspots"
 
     # Carpeta con el mismo nombre del archivo (sin extensión)
     if not shp_output_dir.exists():
@@ -45,7 +47,7 @@ def convert_csv_firms_to_shapefile(csv_path:Path, shp_output_dir:Path) -> Path:
     gdf = gpd.GeoDataFrame(
         df,
         geometry=gpd.points_from_xy(df["longitude"], df["latitude"]),
-        crs="EPSG:4326",
+        crs=points_crs,
     )
 
     # Shapefile tiene limitaciones de nombres/longitud de campos; geopandas manejará truncamientos.

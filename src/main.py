@@ -5,6 +5,7 @@ from pathlib import Path
 from src.config import Config
 from src.utils.firms_hotspots import collect_firms_records, write_csv
 from src.utils.csv_firms_to_shapefile import convert_csv_firms_to_shapefile
+from src.utils.points_vs_polygons import run_spatial_analysis
 
 def main():
     cfg = Config.from_env()
@@ -35,13 +36,16 @@ def main():
 
         # Convertir resultados a shapefile de puntos
         print("\n=== CONVERTIR CSV A SHAPEFILE DE PUNTOS ===")
-        shp_output_dir = output_dir / "points"
-        shp_output_dir.mkdir(parents=True, exist_ok=True)
-        shp_output_path = convert_csv_firms_to_shapefile(csv_output_path,shp_output_dir)
+        shp_output_path = convert_csv_firms_to_shapefile(csv_output_path,output_dir, cfg.points_crs)
 
         print("✔ Conversión completada")
-        print(f"Salida (carpeta): {shp_output_dir}")
         print(f"Shapefile: {shp_output_path}")
+
+        # Correr analisis de cercanía a poligonos
+        print("\n=== ANALIZAR CERCANÍA DE PUNTOS A CAPA DE POLÍGONOS ===")
+        csv_computed_path = run_spatial_analysis(cfg, csv_output_path, output_dir)
+        print(f"Salida: {csv_computed_path}")
+
 
         return 0
 
