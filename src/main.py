@@ -36,7 +36,7 @@ def main():
 
         # Convertir resultados a shapefile de puntos
         print("\n=== CONVERTIR CSV A SHAPEFILE DE PUNTOS ===")
-        shp_output_path = convert_csv_firms_to_shapefile(csv_output_path,output_dir, cfg.points_crs)
+        shp_output_path = convert_csv_firms_to_shapefile(csv_output_path,output_dir, cfg.points_crs, "hotspots")
 
         print("✔ Conversión completada")
         print(f"Shapefile: {shp_output_path}")
@@ -45,6 +45,9 @@ def main():
         print("\n=== ANALIZAR CERCANÍA DE PUNTOS A CAPA DE POLÍGONOS ===")
         csv_computed_path = run_spatial_analysis(cfg, csv_output_path, output_dir)
         print(f"Salida: {csv_computed_path}")
+
+        # Convertir csv de los puntos analizados a Shapefile
+        convert_csv_firms_to_shapefile(csv_computed_path, output_dir, cfg.points_crs, "computed_hotspots")
 
 
         return 0
