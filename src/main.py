@@ -6,6 +6,7 @@ from src.config import Config
 from src.utils.firms_hotspots import collect_firms_records, write_csv
 from src.utils.csv_firms_to_shapefile import convert_csv_firms_to_shapefile
 from src.utils.points_vs_polygons import run_spatial_analysis
+from src.utils.generate_image import generate_images
 
 def main():
     cfg = Config.from_env()
@@ -48,6 +49,11 @@ def main():
 
         # Convertir csv de los puntos analizados a Shapefile
         convert_csv_firms_to_shapefile(csv_computed_path, output_dir, cfg.points_crs, "computed_hotspots")
+
+        # Generar imágenes
+        print("\n=== GENERAR IMÁGENES ===")
+        generate_images(cfg, output_dir, csv_computed_path)
+
 
 
         return 0

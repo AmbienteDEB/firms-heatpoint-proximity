@@ -25,6 +25,14 @@ class Config:
     polygons_name_field: str
     buffer_km: float
     metric_crs: str
+    # GENERACIÓN DE IMÁGENES POR POLÍGONO
+    tile_zoom: int
+    dpi: int
+    icon_path: Path
+    icon_zoom: float
+    buffer_icon_path: Optional[Path]
+    buffer_icon_zoom: Optional[float]
+
 
     @staticmethod
     def from_env() -> "Config":
@@ -81,6 +89,46 @@ class Config:
         if not metric_crs:
             raise ValueError("METRIC_CRS debe establecerse en el .env (Generalmente el valor debe ser EPSG:32616)")
 
+        # GENERACIÓN DE IMÁGENES POR POLÍGONO
+
+        tile_zoom = int((os.getenv("TILE_ZOOM") or "12").strip())
+        if not (0 <= tile_zoom <= 22):
+            raise ValueError("TILE_ZOOM debe estar entre 0 y 22 (zoom típico de tiles web).")
+
+        # Resolución de salida
+        dpi_raw = (os.getenv("DPI") or "300").strip()
+
+        try:
+            dpi = int(dpi_raw)
+        except ValueError:
+            raise ValueError("DPI debe ser un número entero (ej. 300)")
+
+        if not (72 <= dpi <= 1200):
+            raise ValueError("DPI debe estar entre 72 y 1200")
+
+        icon_path = _validate_icon_path((os.getenv("ICON_PATH") or "").strip())
+
+        icon_zoom = float((os.getenv("ICON_ZOOM") or "1.0").strip())
+        if not (icon_zoom > 0):
+            raise ValueError("ICON_ZOOM debe ser > 0 (ej. 1.0).")
+
+        # ICONO PARA BUFFER (OPCIONAL)
+        buffer_icon_path_raw = (os.getenv("BUFFER_ICON_PATH") or "").strip()
+        buffer_icon_path = _validate_optional_icon(buffer_icon_path_raw)
+
+        buffer_icon_zoom_raw = (os.getenv("BUFFER_ICON_ZOOM") or "").strip()
+
+        if buffer_icon_path and not buffer_icon_zoom_raw:
+            raise ValueError("Si defines BUFFER_ICON_PATH, debes definir BUFFER_ICON_ZOOM")
+
+        if buffer_icon_zoom_raw:
+            buffer_icon_zoom = float(buffer_icon_zoom_raw)
+            if not buffer_icon_zoom > 0:
+                raise ValueError("BUFFER_ICON_ZOOM debe ser > 0")
+        else:
+            buffer_icon_zoom = None
+
+
         return Config(
             results_path=results_path,
             map_key=map_key,
@@ -93,7 +141,13 @@ class Config:
             polygons_path=polygons_path,
             polygons_name_field=polygons_name_field,
             buffer_km=buffer_km,
-            metric_crs=metric_crs
+            metric_crs=metric_crs,
+            tile_zoom=tile_zoom,
+            dpi=dpi,
+            icon_path=icon_path,
+            icon_zoom=icon_zoom,
+            buffer_icon_path=buffer_icon_path,
+            buffer_icon_zoom=buffer_icon_zoom
         )
 
 def parse_bbox(bbox_str: str) -> Tuple[float, float, float, float]:
@@ -182,3 +236,53 @@ def _validate_polygons_path(path_raw: str, forced_crs: Optional[str]) -> Path:
             )
 
     return polygons_path
+
+def _validate_icon_path(path_raw: str) -> Path:
+    """
+    Valida que la ruta del icono:
+    - Exista
+    - Sea archivo
+    - Tenga extensión de imagen soportada
+    """
+    if not path_raw:
+        raise ValueError("Falta ICON_PATH en el .env")
+
+    icon_path = Path(path_raw)
+
+    if not icon_path.exists():
+        raise ValueError(f"ICON_PATH no existe: {icon_path}")
+
+    if not icon_path.is_file():
+        raise ValueError(f"ICON_PATH no es un archivo válido: {icon_path}")
+
+    allowed_ext = {".png", ".jpg", ".jpeg", ".webp", ".svg"}
+    ext = icon_path.suffix.lower()
+    if ext not in allowed_ext:
+        raise ValueError(f"ICON_PATH debe ser una imagen {sorted(allowed_ext)}. Recibido: '{ext}' ({icon_path})")
+
+    return icon_path
+
+def _validate_optional_icon(path_raw: str) -> Optional[Path]:
+    """
+    Valida icono opcional.
+    Si está vacío, retorna None.
+    Si existe, valida igual que icon normal.
+    """
+    if not path_raw:
+        return None
+
+    icon_path = Path(path_raw)
+
+    if not icon_path.exists():
+        raise ValueError(f"BUFFER_ICON_PATH no existe: {icon_path}")
+
+    if not icon_path.is_file():
+        raise ValueError(f"BUFFER_ICON_PATH no es archivo válido: {icon_path}")
+
+    allowed_ext = {".png", ".jpg", ".jpeg", ".webp"}
+    if icon_path.suffix.lower() not in allowed_ext:
+        raise ValueError(
+            f"BUFFER_ICON_PATH debe ser imagen {sorted(allowed_ext)}"
+        )
+
+    return icon_path
