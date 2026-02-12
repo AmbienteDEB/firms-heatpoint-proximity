@@ -225,8 +225,7 @@ def plot_one_polygon_hybrid_png(
     plt.close(fig)
 
 
-def generate_images(cfg: Config, ouput_dir: Path, csv_processed_path: Path) -> Path:
-    image_out_dir = ouput_dir / 'images'
+def generate_images(cfg: Config, image_out_dir: Path, csv_processed_path: Path) -> Path:
     if not image_out_dir.exists():
         image_out_dir.mkdir(parents=True, exist_ok=True)
 

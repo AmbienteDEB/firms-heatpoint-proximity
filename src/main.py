@@ -7,6 +7,7 @@ from src.utils.firms_hotspots import collect_firms_records, write_csv
 from src.utils.csv_firms_to_shapefile import convert_csv_firms_to_shapefile
 from src.utils.points_vs_polygons import run_spatial_analysis
 from src.utils.generate_image import generate_images
+from src.utils.report_generator import build_pdf_report
 
 def main():
     cfg = Config.from_env()
@@ -52,8 +53,13 @@ def main():
 
         # Generar imágenes
         print("\n=== GENERAR IMÁGENES ===")
-        generate_images(cfg, output_dir, csv_computed_path)
+        image_out_dir = output_dir / 'images'
+        generate_images(cfg, image_out_dir, csv_computed_path)
 
+        print("\n=== GENERAR REPORTE ===")
+        pdf_output_path = output_dir / "reporte.pdf"
+        build_pdf_report(csv_computed_path, image_out_dir, pdf_output_path, cfg.buffer_km)
+        print(f"Salida PDF: {pdf_output_path}")
 
 
         return 0
